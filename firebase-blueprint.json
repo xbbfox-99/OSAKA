@@ -61,9 +61,11 @@
         "userName": { "type": "string" },
         "likes": { "type": "array", "items": { "type": "string" } },
         "dislikes": { "type": "array", "items": { "type": "string" } },
+        "likesCount": { "type": "number" },
+        "dislikesCount": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "url", "slotIndex", "userId", "userName", "likes", "dislikes", "createdAt"]
+      "required": ["id", "url", "slotIndex", "userId", "userName", "likes", "dislikes", "likesCount", "dislikesCount", "createdAt"]
     }
   },
   "firestore": {

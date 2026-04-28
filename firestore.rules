@@ -44,7 +44,7 @@ service cloud.firestore {
         incoming().slotIndex == existing().slotIndex &&
         (
           // Action: Like/Dislike
-          (incoming().diff(existing()).affectedKeys().hasOnly(['likes', 'dislikes']))
+          (incoming().diff(existing()).affectedKeys().hasOnly(['likes', 'dislikes', 'likesCount', 'dislikesCount']))
         )
       );
 
@@ -79,14 +79,16 @@ service cloud.firestore {
 
     function isValidUserPhoto(data) {
       return data.keys().hasAll(['id', 'url', 'slotIndex', 'userId', 'userName', 'likes', 'dislikes', 'createdAt']) &&
-             data.keys().size() == 8 &&
+             data.keys().size() >= 8 && data.keys().size() <= 10 &&
              data.id is string && data.id.size() <= 128 &&
              data.url is string && data.url.size() <= 1048576 && // 1MB limit for base64
              data.slotIndex is number &&
              data.userId is string &&
              data.userName is string && data.userName.size() <= 100 &&
              data.likes is list && data.likes.size() <= 1000 &&
-             data.dislikes is list && data.dislikes.size() <= 1000;
+             data.dislikes is list && data.dislikes.size() <= 1000 &&
+             (!data.keys().hasAny(['likesCount']) || data.likesCount is number) &&
+             (!data.keys().hasAny(['dislikesCount']) || data.dislikesCount is number);
     }
 
     function isValidExpense(data) {
