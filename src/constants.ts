@@ -17,7 +17,7 @@ export const DAYS: Day[] = [
       { time: '12:30', type: 'misc', icon: '🍱', title: '出關 / 逛機場 / 午餐', body: '', guide: '關西機場 抵達 逛街 午餐 推薦' },
       { time: '14:44', type: 'transit', icon: '🚆', title: '搭乘 HARUKA JR 快線', body: '目前未定票 (約台幣 408*4 元)\n所需時間 1 小時 20 分鐘', map: '關西機場駅' },
       { time: '16:04', type: 'transit', icon: '🏯', title: '抵達京都車站', body: '' },
-      { time: '16:30', type: 'hotel', icon: '🛏️', title: 'Hostel Kyoto Kizuna CHECK IN', body: '烏丸線五條站 5 號出口步行 4 分鐘\n¥26,484 元已付 (明叡預定)', tags: [{ type: 'booking', text: '明叡預定' }, { type: 'price', text: '¥26,484 PAID' }], map: 'Hostel Kyoto Kizuna' },
+      { time: '16:30', type: 'hotel', icon: '🛏️', title: 'Hostel Kyoto Kizuna CHECK IN', body: '烏丸線五條站 5 號出口步行 4 分鐘\n¥26,484 元已付 (BOOKING明叡預定)', tags: [{ type: 'booking', text: 'BOOKING明叡預定' }, { type: 'price', text: '¥26,484 PAID' }], map: 'Hostel Kyoto Kizuna' },
       { time: '18:00', type: 'misc', icon: '😴', title: '休息結束前往東寺', body: '' },
       { time: '18:30', type: 'sight', icon: '⛩️', title: '東寺', body: '金堂・講堂夜間特別點燈\n開放時間：18:00–21:30', tags: [{ type: 'price', text: '¥1,000/人' }], map: '東寺 京都', guide: '東寺 京都 夜間點燈 歷史' },
       { time: '19:30', type: 'food', icon: '🍜', title: '京都車站吃飯', body: '京都車站拉麵小路 (10樓) / Porta 地下街 / 鐵板酒場 Hiroshi', tags: [{ type: 'food', text: '拉麵小路 10F' }, { type: 'menu', text: '鐵板酒場 Hiroshi' }], map: '京都駅 拉麵小路', guide: '京都車站拉麵小路 推薦' },

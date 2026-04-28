@@ -115,7 +115,7 @@ export const InfoView: React.FC = () => {
             name="Hostel Kyoto Kizuna"
             dates="05/03 – 05/04"
             price="¥26,484 (已付)"
-            note="明叡預定 // 五條站 5 號出口步行 4 分鐘"
+            note="BOOKING明叡預定 // 五條站 5 號出口步行 4 分鐘"
             link="https://forms.zohopublic.jp/suninc/form/hostelkizunabookingGuestRegister/formperma/Dm4nrTHLLMDMcYe0PVNFYMfAlqxs3OArUvok-7zAmPI"
           />
           <HotelCard 
