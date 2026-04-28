@@ -14,7 +14,8 @@ import {
   updateDoc,
   arrayUnion,
   arrayRemove,
-  getDocFromServer
+  getDocFromServer,
+  increment
 } from 'firebase/firestore';
 
 enum OperationType {
@@ -296,6 +297,8 @@ const UserPhotoGrid: React.FC = () => {
               userName: auth.currentUser?.displayName || '旅客',
               likes: [],
               dislikes: [],
+              likesCount: 0,
+              dislikesCount: 0,
               createdAt: serverTimestamp()
             });
           } catch (error) {
@@ -333,14 +336,31 @@ const UserPhotoGrid: React.FC = () => {
     const docRef = doc(db, 'userPhotos', photoId);
     const path = `userPhotos/${photoId}`;
 
+    // Field names for increment
+    const countField = `${type}Count`;
+    const oppositeCountField = `${oppositeType}Count`;
+
     try {
       if (hasCurrentReaction) {
-        await updateDoc(docRef, { [type]: arrayRemove(userId) });
-      } else {
+        // Toggle off
         await updateDoc(docRef, { 
-          [type]: arrayUnion(userId),
-          [oppositeType]: arrayRemove(userId)
+          [type]: arrayRemove(userId),
+          [countField]: increment(-1)
         });
+      } else {
+        // Toggle on
+        const updateData: any = {
+          [type]: arrayUnion(userId),
+          [countField]: increment(1)
+        };
+
+        // If they had the opposite reaction, remove it
+        if (hasOppositeReaction) {
+          updateData[oppositeType] = arrayRemove(userId);
+          updateData[oppositeCountField] = increment(-1);
+        }
+
+        await updateDoc(docRef, updateData);
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
@@ -388,8 +408,8 @@ const UserPhotoGrid: React.FC = () => {
                     )}
                   >
                     <ThumbsUp className={cn("w-2.5 h-2.5", hasLiked && "fill-current")} />
-                    {photo.likes?.length > 0 && (
-                      <span className="text-[9px] font-bold">{photo.likes.length}</span>
+                    {(photo.likesCount ?? 0) > 0 && (
+                      <span className="text-[9px] font-bold">{photo.likesCount}</span>
                     )}
                   </button>
                   <button 
@@ -400,8 +420,8 @@ const UserPhotoGrid: React.FC = () => {
                     )}
                   >
                     <ThumbsDown className={cn("w-2.5 h-2.5", hasDisliked && "fill-current")} />
-                    {photo.dislikes?.length > 0 && (
-                      <span className="text-[9px] font-bold">{photo.dislikes.length}</span>
+                    {(photo.dislikesCount ?? 0) > 0 && (
+                      <span className="text-[9px] font-bold">{photo.dislikesCount}</span>
                     )}
                   </button>
                 </div>
