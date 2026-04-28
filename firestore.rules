@@ -1,0 +1,114 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // userPhotos collection
+    match /userPhotos/{photoId} {
+      allow list: if true; // Allow everyone to see the grid
+      allow get: if true;
+      
+      allow create: if (
+        isValidId(photoId) &&
+        isValidUserPhoto(incoming()) &&
+        incoming().createdAt == request.time &&
+        (incoming().userId == 'anon' || incoming().userId == request.auth.uid)
+      );
+
+      allow update: if (
+        isValidId(photoId) &&
+        isValidUserPhoto(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().userId == existing().userId &&
+        incoming().url == existing().url &&
+        incoming().slotIndex == existing().slotIndex &&
+        (
+          // Action: Like/Dislike
+          (incoming().diff(existing()).affectedKeys().hasOnly(['likes', 'dislikes']))
+        )
+      );
+
+      allow delete: if (
+        isValidId(photoId) &&
+        (existing().userId == 'anon' || (isSignedIn() && existing().userId == request.auth.uid))
+      );
+    }
+
+    // expenses collection
+    match /expenses/{expenseId} {
+      allow list: if true;
+      allow get: if true;
+      allow create: if isValidExpense(incoming());
+      allow update: if isValidExpense(incoming());
+      allow delete: if true; // In a travel app, allowed for all members
+    }
+
+    // splitExpenses collection
+    match /splitExpenses/{splitExpenseId} {
+      allow list: if true;
+      allow get: if true;
+      allow create: if isValidSplitExpense(incoming());
+      allow update: if isValidSplitExpense(incoming());
+      allow delete: if true;
+    }
+
+    // Connection test collection
+    match /test/{docId} {
+      allow get: if true;
+    }
+
+    function isValidUserPhoto(data) {
+      return data.keys().hasAll(['id', 'url', 'slotIndex', 'userId', 'userName', 'likes', 'dislikes', 'createdAt']) &&
+             data.keys().size() == 8 &&
+             data.id is string && data.id.size() <= 128 &&
+             data.url is string && data.url.size() <= 1048576 && // 1MB limit for base64
+             data.slotIndex is number &&
+             data.userId is string &&
+             data.userName is string && data.userName.size() <= 100 &&
+             data.likes is list && data.likes.size() <= 1000 &&
+             data.dislikes is list && data.dislikes.size() <= 1000;
+    }
+
+    function isValidExpense(data) {
+      return data.keys().hasAll(['member', 'name', 'amount', 'currency', 'category', 'date', 'userId', 'createdAt']) &&
+             data.member is number &&
+             data.name is string && data.name.size() <= 200 &&
+             data.amount is number &&
+             data.currency in ['JPY', 'TWD'] &&
+             data.category is string &&
+             data.date is string && data.date.size() <= 20 &&
+             data.userId is string;
+    }
+
+    function isValidSplitExpense(data) {
+      return data.keys().hasAll(['name', 'amount', 'currency', 'payer', 'participants', 'date', 'userId', 'createdAt']) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.amount is number &&
+             data.currency in ['JPY', 'TWD'] &&
+             data.payer is string &&
+             data.participants is list && data.participants.size() <= 20 &&
+             data.date is string && data.date.size() <= 20 &&
+             data.userId is string;
+    }
+  }
+}

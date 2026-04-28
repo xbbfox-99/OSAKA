@@ -1,0 +1,8 @@
+{
+  "name": "大阪/京都行程 2026",
+  "description": "2026年5月大阪京都神戶七天六夜行程，提供即時天氣、AI景點導覽、個人與團體記帳功能。",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}

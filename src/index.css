@@ -1,0 +1,78 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Inter:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&family=Noto+Serif+TC:wght@400;700;900&display=swap');
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-serif: "Noto Serif TC", serif;
+
+  --color-primary: #D97706; /* Vibrant Amber/Orange */
+  --color-accent-coral: #F43F5E; /* Rose, used sparingly */
+  --color-accent-sage: #10B981; /* Emerald */
+  --color-accent-gold: #F59E0B; /* Amber */
+  --color-bg-dark: #F7F3F0; /* Pale Milk Tea Background */
+  --color-surface: #F0EAE4; /* Slightly deeper milk tea for surface */
+  --color-border: #DED6CF;
+  
+  --color-indigo-dark: #F5F1EE;
+  --color-indigo-mid: #EDE6E1;
+  --color-indigo-light: #E5DBD3;
+  --color-sakura: #E67E7E;
+  --color-sakura-light: #F2A3A3;
+  --color-gold: #D4AF37;
+  --color-teal: #94A684;
+  --color-lavender: #A69CAC;
+  --color-sky: #9BB8CD;
+}
+
+/* Hide year in date inputs for a cleaner trip-focused UI */
+input[type="date"]::-webkit-datetime-edit-year-field {
+  display: none;
+}
+input[type="date"]::-webkit-datetime-edit-text:nth-of-type(2) {
+  display: none;
+}
+
+@layer base {
+  body {
+    @apply antialiased bg-bg-dark text-zinc-700 min-h-screen font-sans;
+  }
+
+  h1, h2, h3 {
+    @apply font-display tracking-tight;
+  }
+
+  h1 {
+    @apply font-black;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+.glass {
+  @apply bg-white/40 border border-zinc-200/50 backdrop-blur-md;
+}
+
+.timeline-dot-shadow {
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+.text-stroke {
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.4);
+}
+
+.text-stroke-dark {
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.15);
+}
+
+.font-condensed {
+  font-stretch: 75%;
+}

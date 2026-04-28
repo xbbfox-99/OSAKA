@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "expense": {
+      "title": "Expense",
+      "description": "Personal expense record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "member": { "type": "number" },
+        "name": { "type": "string" },
+        "store": { "type": "string" },
+        "amount": { "type": "number" },
+        "preTaxAmount": { "type": "number" },
+        "currency": { "type": "string", "enum": ["JPY", "TWD"] },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "translatedName": { "type": "string" },
+              "price": { "type": "number" }
+            }
+          }
+        },
+        "order": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "member", "name", "amount", "currency", "category", "date", "userId"]
+    },
+    "splitExpense": {
+      "title": "Split Expense",
+      "description": "Shared expense across team members",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "name": { "type": "string" },
+        "date": { "type": "string" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "enum": ["JPY", "TWD"] },
+        "payer": { "type": "string" },
+        "participants": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "order": { "type": "number" }
+      },
+      "required": ["id", "name", "date", "amount", "currency", "payer", "participants"]
+    },
+    "userPhoto": {
+      "title": "User Photo",
+      "description": "Photo uploaded by users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "url": { "type": "string" },
+        "slotIndex": { "type": "number" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "dislikes": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "url", "slotIndex", "userId", "userName", "likes", "dislikes", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/expenses/{expenseId}": {
+      "schema": "expense",
+      "description": "Collection of personal expenses"
+    },
+    "/splitExpenses/{splitExpenseId}": {
+      "schema": "splitExpense",
+      "description": "Collection of split expenses"
+    },
+    "/userPhotos/{photoId}": {
+      "schema": "userPhoto",
+      "description": "Collection of user uploaded photos"
+    }
+  }
+}
