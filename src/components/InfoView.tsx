@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Home, Utensils, ShieldAlert, ExternalLink, MapPin, Plus, X, Loader2, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Plane, Home, Utensils, ShieldAlert, ExternalLink, MapPin, Plus, X, Loader2, ThumbsUp, ThumbsDown, CheckSquare, Square, ShoppingBag, Briefcase, Trash2, ChevronRight, ListChecks } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { db, auth } from '../lib/firebase';
 import { 
@@ -15,7 +15,9 @@ import {
   arrayUnion,
   arrayRemove,
   getDocFromServer,
-  increment
+  increment,
+  getDocs,
+  where
 } from 'firebase/firestore';
 
 enum OperationType {
@@ -76,152 +78,416 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 export const InfoView: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'packing' | 'shopping'>('overview');
+
   return (
-    <div className="p-6 pb-24 space-y-12">
-      {/* Flight Section */}
-      <section>
-        <div className="text-xs font-black tracking-[0.3em] uppercase text-zinc-400 mb-6 flex items-center gap-4">
-          <div className="w-12 h-0.5 bg-primary/30" />
-          航班資訊
+    <div className="flex flex-col min-h-screen pb-24">
+      {/* Sticky Tab Header */}
+      <div className="sticky top-0 z-40 bg-bg-dark/80 backdrop-blur-md border-b border-border">
+        <div className="flex px-6 h-14">
+          <button 
+            onClick={() => setActiveTab('overview')}
+            className={cn(
+              "flex-[1.2] h-full text-[10px] font-black uppercase tracking-[0.2em] transition-all relative",
+              activeTab === 'overview' ? "text-primary" : "text-zinc-500 hover:text-zinc-300"
+            )}
+          >
+            概覽
+            {activeTab === 'overview' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
+          </button>
+          <button 
+            onClick={() => setActiveTab('packing')}
+            className={cn(
+              "flex-1 h-full text-[10px] font-black uppercase tracking-[0.2em] transition-all relative",
+              activeTab === 'packing' ? "text-primary" : "text-zinc-500 hover:text-zinc-300"
+            )}
+          >
+            行李
+            {activeTab === 'packing' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
+          </button>
+          <button 
+            onClick={() => setActiveTab('shopping')}
+            className={cn(
+              "flex-1 h-full text-[10px] font-black uppercase tracking-[0.2em] transition-all relative",
+              activeTab === 'shopping' ? "text-primary" : "text-zinc-500 hover:text-zinc-300"
+            )}
+          >
+            待買
+            {activeTab === 'shopping' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
+          </button>
         </div>
-        <div className="space-y-8">
-          <FlightCard 
-            date="5月03日" 
-            from="KHH" fromName="高雄" 
-            to="KIX" toName="大阪關西"
-            depTime="07:00" arrTime="11:00"
-            note="IT284 航班 // 04:00 UBER 出發"
-            accent="primary"
-          />
-          <FlightCard 
-            date="5月09日" 
-            from="KIX" fromName="大阪關西" 
-            to="KHH" toName="高雄"
-            depTime="11:55" arrTime="14:00"
-            note="IT285 航班 // 08:10 南海電鐵"
-            back
-            accent="primary"
-          />
-        </div>
-      </section>
+      </div>
 
-      {/* Hotel Section */}
-      <section>
-        <div className="text-xs font-black tracking-[0.3em] uppercase text-zinc-400 mb-6 flex items-center gap-4">
-          <div className="w-12 h-0.5 bg-accent-gold/40" />
-          住宿資訊
-        </div>
-        <div className="space-y-6">
-          <HotelCard 
-            name="Hostel Kyoto Kizuna"
-            dates="05/03 – 05/04"
-            price="¥26,484 (已付)"
-            note="BOOKING明叡預定 // 五條站 5 號出口步行 4 分鐘"
-            link="https://forms.zohopublic.jp/suninc/form/hostelkizunabookingGuestRegister/formperma/Dm4nrTHLLMDMcYe0PVNFYMfAlqxs3OArUvok-7zAmPI"
-          />
-          <HotelCard 
-            name="RESI STAY HEART"
-            dates="05/04 – 05/07"
-            price="¥79,300"
-            note="Agoda 明叡預定 // 需回覆預計抵達時間 // 1 樓有洗衣房"
-          />
-          <HotelCard 
-            name="東橫 INN 大阪難波"
-            dates="05/07 – 05/09"
-            price="TWD 12,704"
-            note="Trip.com 耀軒預定"
-          />
-        </div>
-      </section>
+      <div className="flex-1">
+        {activeTab === 'overview' && (
+          <div className="p-6 space-y-12 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Flight Section */}
+            <section>
+              <div className="text-xs font-black tracking-[0.3em] uppercase text-zinc-400 mb-6 flex items-center gap-4">
+                <div className="w-12 h-0.5 bg-primary/30" />
+                航班資訊
+              </div>
+              <div className="space-y-8">
+                <FlightCard 
+                  date="5月03日" 
+                  from="KHH" fromName="高雄" 
+                  to="KIX" toName="大阪關西"
+                  depTime="07:00" arrTime="11:00"
+                  note="IT284 航班 // 04:00 UBER 出發"
+                  accent="primary"
+                />
+                <FlightCard 
+                  date="5月09日" 
+                  from="KIX" fromName="大阪關西" 
+                  to="KHH" toName="高雄"
+                  depTime="11:55" arrTime="14:00"
+                  note="IT285 航班 // 08:10 南海電鐵"
+                  back
+                  accent="primary"
+                />
+              </div>
+            </section>
 
-      {/* Restaurant Section */}
-      <section>
-        <div className="text-xs font-black tracking-[0.3em] uppercase text-zinc-400 mb-6 flex items-center gap-4">
-          <div className="w-12 h-0.5 bg-border" />
-          已確認預訂
-        </div>
-        <div className="border border-border bg-surface p-6 space-y-8">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <div className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">京都 / 燒肉</div>
-              <div className="text-xl font-black tracking-tight uppercase text-zinc-800">京の燒肉處 弘</div>
-              <div className="text-[10px] text-zinc-400 font-bold uppercase mt-1 tracking-widest">5月06日 (三) 19:30 // 京都站前店</div>
-            </div>
-            <div className="text-[8px] font-black uppercase tracking-widest border border-primary px-2 py-0.5 text-primary">耀軒預定</div>
+            {/* Hotel Section */}
+            <section>
+              <div className="text-xs font-black tracking-[0.3em] uppercase text-zinc-400 mb-6 flex items-center gap-4">
+                <div className="w-12 h-0.5 bg-accent-gold/40" />
+                住宿資訊
+              </div>
+              <div className="space-y-6">
+                <HotelCard 
+                  name="Hostel Kyoto Kizuna"
+                  dates="05/03 – 05/04"
+                  price="¥26,484 (已付)"
+                  note="BOOKING明叡預定 // 五條站 5 號出口步行 4 分鐘"
+                  link="https://forms.zohopublic.jp/suninc/form/hostelkizunabookingGuestRegister/formperma/Dm4nrTHLLMDMcYe0PVNFYMfAlqxs3OArUvok-7zAmPI"
+                />
+                <HotelCard 
+                  name="RESI STAY HEART"
+                  dates="05/04 – 05/07"
+                  price="¥79,300"
+                  note="Agoda 明叡預定 // 需回覆預計抵達時間 // 1 樓有洗衣房"
+                />
+                <HotelCard 
+                  name="東橫 INN 大阪難波"
+                  dates="05/07 – 05/09"
+                  price="TWD 12,704"
+                  note="Trip.com 耀軒預定"
+                />
+              </div>
+            </section>
+
+            {/* Restaurant Section */}
+            <section>
+              <div className="text-xs font-black tracking-[0.3em] uppercase text-zinc-400 mb-6 flex items-center gap-4">
+                <div className="w-12 h-0.5 bg-border" />
+                已確認預訂
+              </div>
+              <div className="border border-border bg-surface p-6 space-y-8">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">京都 / 燒肉</div>
+                    <div className="text-xl font-black tracking-tight uppercase text-zinc-800">京の燒肉處 弘</div>
+                    <div className="text-[10px] text-zinc-400 font-bold uppercase mt-1 tracking-widest">5月06日 (三) 19:30 // 京都站前店</div>
+                  </div>
+                  <div className="text-[8px] font-black uppercase tracking-widest border border-primary px-2 py-0.5 text-primary">耀軒預定</div>
+                </div>
+
+                <div className="w-full h-px bg-border/50" />
+
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">大阪 / 燒肉</div>
+                    <div className="text-xl font-black tracking-tight uppercase text-zinc-800">燒肉力丸</div>
+                    <div className="text-[10px] text-zinc-400 font-bold uppercase mt-1 tracking-widest">5月07日 (四) 19:00 // 難波道頓堀店</div>
+                  </div>
+                  <div className="text-[8px] font-black uppercase tracking-widest border border-primary px-2 py-0.5 text-primary">偉晉預定</div>
+                </div>
+                
+                <div className="w-full h-px bg-border/50" />
+
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">海之京都一日遊</div>
+                    <div className="text-xl font-black tracking-tight uppercase text-zinc-800">伊根 / 天橋立</div>
+                    <div className="text-[10px] text-zinc-400 font-bold uppercase mt-1 tracking-widest">5月04日 (一) 08:00 AM // 京都站八条口</div>
+                  </div>
+                  <div className="text-[8px] font-black uppercase tracking-widest border border-primary px-2 py-0.5 text-primary">偉晉 (KKday)</div>
+                </div>
+              </div>
+            </section>
+
+            {/* Emergency Section */}
+            <section>
+              <div className="text-xs font-black tracking-[0.3em] uppercase text-primary mb-6 flex items-center gap-4">
+                <div className="w-12 h-0.5 bg-primary/20" />
+                緊急回報
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <EmergencyCard label="警察" number="110" />
+                <EmergencyCard label="救護車 / 火警" number="119" />
+                <EmergencyCard label="外交部急難救助" number="+886 800-085-095" className="col-span-2 py-8" />
+              </div>
+            </section>
+
+            {/* Image Grid Section */}
+            <section className="pb-12">
+              <div className="text-xs font-black tracking-[0.3em] uppercase text-zinc-400 mb-6 flex items-center gap-4">
+                <div className="w-12 h-0.5 bg-border" />
+                Karina
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  'https://duk.tw/FUMSMp.jpg',
+                  'https://duk.tw/25Imqx.jpg',
+                  'https://duk.tw/mGOasn.jpg',
+                  'https://duk.tw/VCI89S.jpg'
+                ].map((url, i) => (
+                  <div key={i} className="aspect-[3/4] overflow-hidden border-2 border-zinc-900 group relative bg-zinc-100">
+                    <img 
+                      src={url}
+                      alt={`Trip snapshot ${i + 1}`}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover transition-all duration-500"
+                    />
+                    <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* User Upload Grid Section */}
+            <section className="pb-12">
+              <div className="text-xs font-black tracking-[0.3em] uppercase text-zinc-400 mb-6 flex items-center gap-4">
+                <div className="w-12 h-0.5 bg-border" />
+                旅客自由上傳
+              </div>
+              <UserPhotoGrid />
+            </section>
           </div>
-
-          <div className="w-full h-px bg-border/50" />
-
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <div className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">大阪 / 燒肉</div>
-              <div className="text-xl font-black tracking-tight uppercase text-zinc-800">燒肉力丸</div>
-              <div className="text-[10px] text-zinc-400 font-bold uppercase mt-1 tracking-widest">5月07日 (四) 19:00 // 難波道頓堀店</div>
-            </div>
-            <div className="text-[8px] font-black uppercase tracking-widest border border-primary px-2 py-0.5 text-primary">偉晉預定</div>
+        )}
+        {activeTab === 'packing' && (
+          <div className="p-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <ChecklistView type="packing" title="行李清單" icon={<Briefcase className="w-4 h-4" />} />
           </div>
-          
-          <div className="w-full h-px bg-border/50" />
-
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <div className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">海之京都一日遊</div>
-              <div className="text-xl font-black tracking-tight uppercase text-zinc-800">伊根 / 天橋立</div>
-              <div className="text-[10px] text-zinc-400 font-bold uppercase mt-1 tracking-widest">5月04日 (一) 08:00 AM // 京都站八条口</div>
-            </div>
-            <div className="text-[8px] font-black uppercase tracking-widest border border-primary px-2 py-0.5 text-primary">偉晉 (KKday)</div>
+        )}
+        {activeTab === 'shopping' && (
+          <div className="p-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <ChecklistView type="shopping" title="待買清單" icon={<ShoppingBag className="w-4 h-4" />} />
           </div>
-        </div>
-      </section>
+        )}
+      </div>
+    </div>
+  );
+};
 
-      {/* Emergency Section */}
-      <section>
-        <div className="text-xs font-black tracking-[0.3em] uppercase text-primary mb-6 flex items-center gap-4">
-          <div className="w-12 h-0.5 bg-primary/20" />
-          緊急回報
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <EmergencyCard label="警察" number="110" />
-          <EmergencyCard label="救護車 / 火警" number="119" />
-          <EmergencyCard label="外交部急難救助" number="+886 800-085-095" className="col-span-2 py-8" />
-        </div>
-      </section>
+const ChecklistView: React.FC<{ type: 'packing' | 'shopping', title: string, icon: React.ReactNode }> = ({ type, title, icon }) => {
+  const [checklist, setChecklist] = useState<any>(null);
+  const [newItemText, setNewItemText] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>(type === 'packing' ? '隨身行李' : '藥品');
+  const [loading, setLoading] = useState(true);
 
-      {/* Image Grid Section */}
-      <section className="pb-12">
-        <div className="text-xs font-black tracking-[0.3em] uppercase text-zinc-400 mb-6 flex items-center gap-4">
-          <div className="w-12 h-0.5 bg-border" />
-          Karina
+  const packingCategories = ['隨身行李', '後背包', '托運行李'];
+  const shoppingCategories = ['藥品', '服飾', '其他'];
+  const currentCategories = type === 'packing' ? packingCategories : shoppingCategories;
+
+  const defaultItems: Record<string, { text: string, category: string }[]> = {
+    packing: [
+      { text: '護照 (及其影本)', category: '隨身行李' },
+      { text: '日幣現金 / 信用卡', category: '隨身行李' },
+      { text: 'Suica / ICOCA / 交通票券', category: '隨身行李' },
+      { text: '手機 / eSIM 漫遊開通', category: '隨身行李' },
+      { text: '行動電源 (需隨身攜帶)', category: '後背包' },
+      { text: '充電線 / 轉接頭', category: '後背包' },
+      { text: '摺疊傘 / 雨具', category: '後背包' },
+      { text: '備用眼鏡 / 隱形眼鏡', category: '後背包' },
+      { text: '隨身感冒藥 / 止痛藥', category: '後背包' },
+      { text: '衣物 (視天數而定)', category: '托運行李' },
+      { text: '盥洗用品 / 保養品', category: '托運行李' },
+      { text: '休足時間 / 痠痛貼布', category: '托運行李' },
+      { text: '購物用大摺疊袋', category: '托運行李' },
+    ],
+    shopping: [
+      { text: '合利他命 EX Plus', category: '其他' },
+      { text: '參天眼藥水', category: '其他' },
+      { text: 'UNIQLO 限定 T', category: '其他' },
+    ]
+  };
+
+  useEffect(() => {
+    const q = query(collection(db, 'checklists'), where('type', '==', type));
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      if (snapshot.empty) {
+        // Initialize with default items if not exists
+        const id = `${type}_main`;
+        const initialItems = defaultItems[type].map((item, idx) => ({
+          id: `item_${Date.now()}_${idx}`,
+          text: item.text,
+          completed: false,
+          category: item.category
+        }));
+        
+        await setDoc(doc(db, 'checklists', id), {
+          id,
+          type,
+          items: initialItems,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        setChecklist(snapshot.docs[0].data());
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, [type]);
+
+  const toggleItem = async (itemId: string) => {
+    if (!checklist) return;
+    const updatedItems = checklist.items.map((item: any) => 
+      item.id === itemId ? { ...item, completed: !item.completed } : item
+    );
+    await updateDoc(doc(db, 'checklists', checklist.id), {
+      items: updatedItems,
+      updatedAt: serverTimestamp()
+    });
+  };
+
+  const addItem = async () => {
+    if (!newItemText.trim() || !checklist) return;
+    const newItem = {
+      id: `item_${Date.now()}`,
+      text: newItemText.trim(),
+      completed: false,
+      category: type === 'packing' ? selectedCategory : '其他'
+    };
+    await updateDoc(doc(db, 'checklists', checklist.id), {
+      items: [...checklist.items, newItem],
+      updatedAt: serverTimestamp()
+    });
+    setNewItemText('');
+  };
+
+  const removeItem = async (itemId: string) => {
+    if (!checklist) return;
+    const updatedItems = checklist.items.filter((item: any) => item.id !== itemId);
+    await updateDoc(doc(db, 'checklists', checklist.id), {
+      items: updatedItems,
+      updatedAt: serverTimestamp()
+    });
+  };
+
+  // Filter items based on selected category (only for packing list)
+  const filteredItems = checklist 
+    ? (type === 'packing' 
+        ? checklist.items.filter((item: any) => (item.category || '其他') === selectedCategory)
+        : checklist.items)
+    : [];
+
+  if (loading) return (
+    <div className="py-20 flex flex-col items-center justify-center text-zinc-500 gap-4">
+      <Loader2 className="w-8 h-8 animate-spin" />
+      <span className="text-[10px] font-black uppercase tracking-widest">LOADING LIST...</span>
+    </div>
+  );
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-6">
+        <div className="text-xs font-black tracking-[0.3em] uppercase text-zinc-300 flex items-center gap-4">
+          <div className="w-8 h-0.5 bg-border" />
+          {icon}
+          {type === 'packing' ? selectedCategory : title}
         </div>
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            'https://duk.tw/FUMSMp.jpg',
-            'https://duk.tw/25Imqx.jpg',
-            'https://duk.tw/mGOasn.jpg',
-            'https://duk.tw/VCI89S.jpg'
-          ].map((url, i) => (
-            <div key={i} className="aspect-[3/4] overflow-hidden border-2 border-zinc-900 group relative bg-zinc-100">
-              <img 
-                src={url}
-                alt={`Trip snapshot ${i + 1}`}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover transition-all duration-500"
-              />
-              <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+        <div className="text-[10px] font-mono font-bold text-zinc-500 uppercase">
+          {filteredItems.filter((i: any) => i.completed).length} / {filteredItems.length}
+        </div>
+      </div>
+
+      <div className="space-y-8 min-h-[300px]">
+        {/* Category Tabs (Only for Packing List) */}
+        {type === 'packing' && (
+          <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar border-b border-border/30">
+            {currentCategories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={cn(
+                  "px-4 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border",
+                  selectedCategory === cat 
+                    ? "bg-primary text-white border-primary shadow-lg shadow-primary/20" 
+                    : "bg-surface text-zinc-500 border-border hover:border-zinc-400"
+                )}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className={cn(
+          "grid gap-x-4 gap-y-1 animate-in fade-in duration-300",
+          filteredItems.length > 0 ? "grid-cols-2" : "grid-cols-1"
+        )}>
+          {filteredItems.map((item: any) => (
+            <div key={item.id} className="flex items-center justify-between group py-2 px-1 hover:bg-surface/50 border-b border-border/20">
+              <button 
+                onClick={() => toggleItem(item.id)}
+                className="flex items-center gap-3 flex-1 text-left min-w-0"
+              >
+                {item.completed ? (
+                  <div className="w-4 h-4 bg-primary rounded-sm flex-shrink-0 flex items-center justify-center">
+                    <CheckSquare className="w-3 h-3 text-white" />
+                  </div>
+                ) : (
+                  <div className="w-4 h-4 border-2 border-zinc-300 rounded-sm flex-shrink-0 group-hover:border-primary transition-colors" />
+                )}
+                <span className={cn(
+                  "text-[13px] font-bold tracking-tight transition-all truncate",
+                  item.completed ? "text-zinc-400 line-through decoration-primary/40" : "text-zinc-800"
+                )}>
+                  {item.text}
+                </span>
+              </button>
+              <button 
+                onClick={() => removeItem(item.id)}
+                className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-red-500 transition-all flex-shrink-0"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
             </div>
           ))}
+          {filteredItems.length === 0 && (
+            <div className="py-20 text-center col-span-full">
+              <ListChecks className="w-12 h-12 text-zinc-200 mx-auto mb-4" />
+              <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">目前沒有項目</p>
+            </div>
+          )}
         </div>
-      </section>
 
-      {/* User Upload Grid Section */}
-      <section className="pb-12">
-        <div className="text-xs font-black tracking-[0.3em] uppercase text-zinc-400 mb-6 flex items-center gap-4">
-          <div className="w-12 h-0.5 bg-border" />
-          旅客自由上傳
+        {/* Add Entry */}
+        <div className="pt-6 border-t border-border/50">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 relative">
+              <input 
+                type="text" 
+                value={newItemText}
+                onChange={(e) => setNewItemText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addItem()}
+                placeholder={type === 'packing' ? `新增到 ${selectedCategory}...` : "新增待買項目..."}
+                className="w-full bg-surface border border-border px-4 py-3 text-sm font-bold tracking-tight placeholder:text-zinc-500 focus:outline-none focus:border-primary transition-all shadow-sm focus:shadow-md"
+              />
+            </div>
+            <button 
+              onClick={addItem}
+              className="bg-primary text-white p-3.5 hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-primary/20"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
         </div>
-        <UserPhotoGrid />
-      </section>
-    </div>
+      </div>
+    </section>
+
   );
 };
 

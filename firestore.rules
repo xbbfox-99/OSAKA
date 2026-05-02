@@ -65,16 +65,30 @@ service cloud.firestore {
 
     // splitExpenses collection
     match /splitExpenses/{splitExpenseId} {
-      allow list: if true;
-      allow get: if true;
+      allow list, get: if true;
       allow create: if isValidSplitExpense(incoming());
       allow update: if isValidSplitExpense(incoming());
+      allow delete: if true;
+    }
+
+    // checklists collection
+    match /checklists/{checklistId} {
+      allow list, get: if true;
+      allow create, update: if isValidChecklist(incoming());
       allow delete: if true;
     }
 
     // Connection test collection
     match /test/{docId} {
       allow get: if true;
+    }
+
+    function isValidChecklist(data) {
+      return data.keys().hasAll(['id', 'type', 'items', 'updatedAt']) &&
+             data.id is string &&
+             data.type in ['packing', 'shopping'] &&
+             data.items is list &&
+             data.items.size() <= 200;
     }
 
     function isValidUserPhoto(data) {

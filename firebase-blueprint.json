@@ -66,6 +66,30 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "url", "slotIndex", "userId", "userName", "likes", "dislikes", "likesCount", "dislikesCount", "createdAt"]
+    },
+    "checklist": {
+      "title": "Checklist",
+      "description": "Syncable packing or shopping list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["packing", "shopping"] },
+        "title": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "completed": { "type": "boolean" },
+              "category": { "type": "string" }
+            }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "type", "items", "updatedAt"]
     }
   },
   "firestore": {
@@ -80,6 +104,10 @@
     "/userPhotos/{photoId}": {
       "schema": "userPhoto",
       "description": "Collection of user uploaded photos"
+    },
+    "/checklists/{checklistId}": {
+      "schema": "checklist",
+      "description": "Collection of trip checklists"
     }
   }
 }
