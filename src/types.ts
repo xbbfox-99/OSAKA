@@ -35,6 +35,7 @@ export interface Expense {
   category: string;
   date: string;
   items?: { name: string; translatedName?: string; price: number }[];
+  order?: number;
 }
 
 export interface SplitExpense {
@@ -45,4 +46,5 @@ export interface SplitExpense {
   payer: string;
   participants: string[];
   date: string;
+  order?: number;
 }

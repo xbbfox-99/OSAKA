@@ -45,7 +45,9 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 export const BudgetView: React.FC = () => {
-  const [tab, setTab] = useState<'personal' | 'split'>('personal');
+  const [tab, setTab] = useState<'personal' | 'split'>(() => {
+    return (localStorage.getItem('budget_last_tab') as any) || 'personal';
+  });
   const [currency, setCurrency] = useState<'JPY' | 'TWD'>('JPY');
   
   // Expenses State from Firestore
@@ -66,7 +68,47 @@ export const BudgetView: React.FC = () => {
     items: [] as { name: string; translatedName?: string; price: number }[]
   });
 
-  const [currentMember, setCurrentMember] = useState(0);
+  const [currentMember, setCurrentMember] = useState(() => {
+    return parseInt(localStorage.getItem('budget_last_member') || '0');
+  });
+
+  const [isMigrating, setIsMigrating] = useState(false);
+  
+  useEffect(() => {
+    localStorage.setItem('budget_last_tab', tab);
+  }, [tab]);
+
+  useEffect(() => {
+    localStorage.setItem('budget_last_member', currentMember.toString());
+  }, [currentMember]);
+
+  useEffect(() => {
+    const migrate = async () => {
+      setIsMigrating(true);
+      try {
+        const { getDocs, updateDoc, collection: fsCollection } = await import('firebase/firestore');
+        const collections = ['expenses', 'splitExpenses'];
+        let migratedCount = 0;
+        for (const collName of collections) {
+          const snap = await getDocs(fsCollection(db, collName));
+          for (const docSnap of snap.docs) {
+            const data = docSnap.data();
+            if (data.order === undefined) {
+              await updateDoc(docSnap.ref, { order: Date.now() + migratedCount });
+              migratedCount++;
+            }
+          }
+        }
+        if (migratedCount > 0) console.log(`✅ Migrated ${migratedCount} records with 'order' field.`);
+      } catch (err) {
+        console.error("Migration failed:", err);
+      } finally {
+        setIsMigrating(false);
+      }
+    };
+    migrate();
+  }, []);
+
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [splitChecked, setSplitChecked] = useState([true, true, true, true]);
   
@@ -80,7 +122,7 @@ export const BudgetView: React.FC = () => {
 
   // Firestore Sync
   useEffect(() => {
-    const qExpenses = query(collection(db, 'expenses'), orderBy('date', 'desc'));
+    const qExpenses = query(collection(db, 'expenses'), orderBy('order', 'asc'));
     const unsubExpenses = onSnapshot(qExpenses, (snapshot) => {
       const data = snapshot.docs.map(document => ({ 
         ...document.data(), 
@@ -89,7 +131,7 @@ export const BudgetView: React.FC = () => {
       setExpenses(data);
     }, (error) => handleFirestoreError(error, OperationType.GET, 'expenses'));
 
-    const qSplit = query(collection(db, 'splitExpenses'), orderBy('date', 'desc'));
+    const qSplit = query(collection(db, 'splitExpenses'), orderBy('order', 'asc'));
     const unsubSplit = onSnapshot(qSplit, (snapshot) => {
       const data = snapshot.docs.map(document => ({ 
         ...document.data(), 
@@ -182,7 +224,8 @@ export const BudgetView: React.FC = () => {
       store: store || name.trim(),
       items,
       createdAt: new Date().toISOString(),
-      userId: auth.currentUser?.uid || 'guest'
+      userId: auth.currentUser?.uid || 'guest',
+      order: Date.now() // Initial order
     };
 
     if (numPreTax !== undefined && !isNaN(numPreTax)) {
@@ -232,7 +275,8 @@ export const BudgetView: React.FC = () => {
       participants,
       date: formattedDate,
       createdAt: new Date().toISOString(),
-      userId: auth.currentUser?.uid || 'guest'
+      userId: auth.currentUser?.uid || 'guest',
+      order: Date.now()
     };
 
     try {
@@ -265,44 +309,70 @@ export const BudgetView: React.FC = () => {
     return dateStr;
   };
 
-  const moveMemberExpense = (id: string, direction: 'up' | 'down') => {
+  const moveMemberExpense = async (id: string, direction: 'up' | 'down') => {
     const currentMemberExps = expenses.filter(e => e.member === currentMember);
     const index = currentMemberExps.findIndex(e => e.id === id);
     if (index === -1) return;
     
-    if (direction === 'up' && index > 0) {
-      const newExps = [...currentMemberExps];
-      [newExps[index - 1], newExps[index]] = [newExps[index], newExps[index - 1]];
-      updateMemberExpensesOrder(newExps);
-    } else if (direction === 'down' && index < currentMemberExps.length - 1) {
-      const newExps = [...currentMemberExps];
-      [newExps[index + 1], newExps[index]] = [newExps[index], newExps[index + 1]];
-      updateMemberExpensesOrder(newExps);
+    let targetIndex = -1;
+    if (direction === 'up' && index > 0) targetIndex = index - 1;
+    else if (direction === 'down' && index < currentMemberExps.length - 1) targetIndex = index + 1;
+
+    if (targetIndex !== -1) {
+      const item1 = currentMemberExps[index];
+      const item2 = currentMemberExps[targetIndex];
+      
+      // Swap order fields
+      const tempOrder = item1.order || Date.now();
+      const newOrder1 = item2.order || Date.now();
+      const newOrder2 = tempOrder;
+
+      try {
+        const { updateDoc } = await import('firebase/firestore');
+        await Promise.all([
+          updateDoc(doc(db, 'expenses', String(item1.id)), { order: newOrder1 }),
+          updateDoc(doc(db, 'expenses', String(item2.id)), { order: newOrder2 })
+        ]);
+      } catch (error) {
+        console.error("Order update failed:", error);
+      }
     }
   };
 
-  const moveSplitExpense = (id: string, direction: 'up' | 'down') => {
+  const moveSplitExpense = async (id: string, direction: 'up' | 'down') => {
     const index = splitExpenses.findIndex(e => e.id === id);
     if (index === -1) return;
     
-    if (direction === 'up' && index > 0) {
-      const newExps = [...splitExpenses];
-      [newExps[index - 1], newExps[index]] = [newExps[index], newExps[index - 1]];
-      updateSplitOrder(newExps);
-    } else if (direction === 'down' && index < splitExpenses.length - 1) {
-      const newExps = [...splitExpenses];
-      [newExps[index + 1], newExps[index]] = [newExps[index], newExps[index + 1]];
-      updateSplitOrder(newExps);
+    let targetIndex = -1;
+    if (direction === 'up' && index > 0) targetIndex = index - 1;
+    else if (direction === 'down' && index < splitExpenses.length - 1) targetIndex = index + 1;
+
+    if (targetIndex !== -1) {
+      const item1 = splitExpenses[index];
+      const item2 = splitExpenses[targetIndex];
+      
+      const tempOrder = item1.order || Date.now();
+      const newOrder1 = item2.order || Date.now();
+      const newOrder2 = tempOrder;
+
+      try {
+        const { updateDoc } = await import('firebase/firestore');
+        await Promise.all([
+          updateDoc(doc(db, 'splitExpenses', String(item1.id)), { order: newOrder1 }),
+          updateDoc(doc(db, 'splitExpenses', String(item2.id)), { order: newOrder2 })
+        ]);
+      } catch (error) {
+        console.error("Order update failed:", error);
+      }
     }
   };
 
-  const updateMemberExpensesOrder = (newOrder: Expense[]) => {
-    const otherExpenses = expenses.filter(e => e.member !== currentMember);
-    setExpenses([...newOrder, ...otherExpenses]);
+  const updateMemberExpensesOrder = () => {
+    // This is now handled by Firestore snapshots
   };
 
-  const updateSplitOrder = (newOrder: SplitExpense[]) => {
-    setSplitExpenses(newOrder);
+  const updateSplitOrder = () => {
+    // This is now handled by Firestore snapshots
   };
 
   const getAnalyticsData = () => {
@@ -621,7 +691,10 @@ export const BudgetView: React.FC = () => {
               <div className="flex justify-between items-center border-b border-border pb-4">
                 <div className="flex flex-col">
                   <h3 className="text-lg font-black tracking-tighter uppercase text-zinc-800">{MEMBERS[currentMember]} 的帳本</h3>
-                  <span className="text-[10px] font-bold text-zinc-400 tracking-wider">長按或拖曳圖示可調整順序</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-zinc-400 tracking-wider">合計: {expenses.length} 筆資料</span>
+                    {isMigrating && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   {(['JPY', 'TWD'] as const).map(c => (
@@ -670,14 +743,14 @@ export const BudgetView: React.FC = () => {
                     >
                       <div className="flex flex-col gap-1 items-center justify-center border-r border-border/30 pr-3 mr-1">
                         <button 
-                          onClick={() => moveMemberExpense(e.id, 'up')}
+                          onClick={() => moveMemberExpense(String(e.id), 'up')}
                           disabled={idx === 0}
                           className="p-1 hover:text-primary text-zinc-400 disabled:opacity-10 transition-colors"
                         >
                           <ChevronUp className="w-5 h-5" />
                         </button>
                         <button 
-                          onClick={() => moveMemberExpense(e.id, 'down')}
+                          onClick={() => moveMemberExpense(String(e.id), 'down')}
                           disabled={idx === memberExpenses.length - 1}
                           className="p-1 hover:text-primary text-zinc-400 disabled:opacity-10 transition-colors"
                         >
@@ -736,7 +809,7 @@ export const BudgetView: React.FC = () => {
                           <button 
                             onClick={async () => {
                               try {
-                                await deleteDoc(doc(db, 'expenses', e.id.toString()));
+                                await deleteDoc(doc(db, 'expenses', String(e.id)));
                               } catch (error) {
                                 handleFirestoreError(error, OperationType.DELETE, `expenses/${e.id}`);
                               }
@@ -969,14 +1042,14 @@ export const BudgetView: React.FC = () => {
                       <div className="flex items-center gap-4">
                         <div className="flex flex-col gap-1 items-center justify-center border-r border-border/30 pr-4 mr-2">
                           <button 
-                            onClick={() => moveSplitExpense(se.id, 'up')}
+                            onClick={() => moveSplitExpense(String(se.id), 'up')}
                             disabled={idx === 0}
                             className="p-1 hover:text-emerald-600 text-zinc-400 disabled:opacity-10 transition-colors"
                           >
                             <ChevronUp className="w-5 h-5" />
                           </button>
                           <button 
-                            onClick={() => moveSplitExpense(se.id, 'down')}
+                            onClick={() => moveSplitExpense(String(se.id), 'down')}
                             disabled={idx === splitExpenses.length - 1}
                             className="p-1 hover:text-emerald-600 text-zinc-400 disabled:opacity-10 transition-colors"
                           >
@@ -992,7 +1065,7 @@ export const BudgetView: React.FC = () => {
                           <button 
                             onClick={async () => {
                               try {
-                                await deleteDoc(doc(db, 'splitExpenses', se.id.toString()));
+                                await deleteDoc(doc(db, 'splitExpenses', String(se.id)));
                               } catch (error) {
                                 handleFirestoreError(error, OperationType.DELETE, `splitExpenses/${se.id}`);
                               }
