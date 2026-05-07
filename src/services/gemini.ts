@@ -6,12 +6,18 @@ let ai: any = null;
 function getAI() {
   if (!ai) {
     const apiKey = process.env.GEMINI_API_KEY;
+    console.log("🔑 API Key check:", apiKey ? "Defined" : "UNDEFINED");
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not defined");
+      throw new Error("GEMINI_API_KEY is not defined. Please set it in Settings.");
     }
     ai = new GoogleGenAI({ apiKey });
   }
   return ai;
+}
+
+// Helper to clean JSON string from potential markdown markers
+function cleanJsonString(str: string): string {
+  return str.replace(/```json\n?|\n?```/g, '').trim();
 }
 
 export function getPreGeneratedGuide(title: string, query: string): string | null {
@@ -31,7 +37,14 @@ export async function getDestinationGuideStream(
     return;
   }
 
-  const client = getAI();
+  let client;
+  try {
+    client = getAI();
+  } catch (err) {
+    console.error("AI Initialization Error:", err);
+    onChunk("\n\n⚠️ API 金鑰未設定，請在設定中配置 GEMINI_API_KEY。");
+    return;
+  }
   
   const prompt = `你是一位專業的日本旅遊導覽，熟悉大阪和京都的所有景點、美食和文化。
 請詳細介紹「${title}」，參考關鍵字：${query}。
@@ -45,7 +58,7 @@ export async function getDestinationGuideStream(
 
   try {
     const result = await client.models.generateContentStream({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: prompt
     });
 
@@ -61,7 +74,13 @@ export async function getDestinationGuideStream(
 }
 
 export async function getDestinationGuide(title: string, query: string): Promise<string> {
-  const client = getAI();
+  let client;
+  try {
+    client = getAI();
+  } catch (err) {
+    console.error("AI Initialization Error:", err);
+    return "API 金鑰未設定，請在設定中配置 GEMINI_API_KEY。";
+  }
   
   const prompt = `你是一位專業的日本旅遊導覽，熟悉大阪和京都的所有景點、美食和文化。
 請詳細介紹「${title}」，參考關鍵字：${query}。
@@ -75,7 +94,7 @@ export async function getDestinationGuide(title: string, query: string): Promise
 
   try {
     const result = await client.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: prompt
     });
     return (result.text as string) || "暫時無法取得導覽資訊，請稍後再試。";
@@ -95,7 +114,13 @@ export interface ScannedReceipt {
 
 export async function scanReceipt(base64Image: string, mimeType: string): Promise<ScannedReceipt | null> {
   console.log("🚀 Starting Japanese Receipt AI Scan...");
-  const client = getAI();
+  let client;
+  try {
+    client = getAI();
+  } catch (err) {
+    console.error("AI Initialization Error:", err);
+    return null;
+  }
 
   const prompt = `你是一個精通日文與中文的收據專家。請從這張日本收據圖檔中精確提取相關資訊。
 
@@ -118,7 +143,7 @@ export async function scanReceipt(base64Image: string, mimeType: string): Promis
 
   try {
     const response = await client.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: {
         parts: [
           { text: prompt },
@@ -156,9 +181,10 @@ export async function scanReceipt(base64Image: string, mimeType: string): Promis
       }
     });
     
-    const text = response.text || "{}";
-    console.log("✅ Scan Success:", text);
-    const data = JSON.parse(text);
+    const rawText = response.text || "{}";
+    const cleanedText = cleanJsonString(rawText);
+    console.log("✅ Scan Success (Raw):", rawText);
+    const data = JSON.parse(cleanedText);
     
     return {
       date: data.date || new Date().toISOString().split('T')[0],
