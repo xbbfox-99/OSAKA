@@ -543,7 +543,7 @@ export const BudgetView: React.FC = () => {
                             className="flex justify-between items-center group bg-white/50 p-2 rounded border border-transparent hover:border-primary/20 transition-all"
                           >
                             <div className="flex items-center gap-2 flex-1">
-                              <div className="flex flex-col gap-0.5 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="flex flex-col gap-0.5 items-center justify-center border-r border-border/30 pr-2 mr-1">
                                 <button 
                                   onClick={() => {
                                     if (idx === 0) return;
@@ -552,9 +552,9 @@ export const BudgetView: React.FC = () => {
                                     setFormData(p => ({ ...p, items: next }));
                                   }}
                                   disabled={idx === 0}
-                                  className="p-0.5 hover:text-primary text-zinc-300 disabled:opacity-20 transition-colors"
+                                  className="p-0.5 hover:text-primary text-zinc-400 disabled:opacity-10 transition-colors"
                                 >
-                                  <ChevronUp className="w-4 h-4" />
+                                  <ChevronUp className="w-3.5 h-3.5" />
                                 </button>
                                 <button 
                                   onClick={() => {
@@ -564,9 +564,9 @@ export const BudgetView: React.FC = () => {
                                     setFormData(p => ({ ...p, items: next }));
                                   }}
                                   disabled={idx === formData.items.length - 1}
-                                  className="p-0.5 hover:text-primary text-zinc-300 disabled:opacity-20 transition-colors"
+                                  className="p-0.5 hover:text-primary text-zinc-400 disabled:opacity-10 transition-colors"
                                 >
-                                  <ChevronDown className="w-4 h-4" />
+                                  <ChevronDown className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                               <div className="flex flex-col flex-1 pl-1">
@@ -668,18 +668,18 @@ export const BudgetView: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       className="flex gap-4 items-center group py-4 border-b border-border/50 bg-bg-dark"
                     >
-                      <div className="flex flex-col gap-1 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex flex-col gap-1 items-center justify-center border-r border-border/30 pr-3 mr-1">
                         <button 
                           onClick={() => moveMemberExpense(e.id, 'up')}
                           disabled={idx === 0}
-                          className="p-1 hover:text-primary text-zinc-300 disabled:opacity-20 transition-colors"
+                          className="p-1 hover:text-primary text-zinc-400 disabled:opacity-10 transition-colors"
                         >
                           <ChevronUp className="w-5 h-5" />
                         </button>
                         <button 
                           onClick={() => moveMemberExpense(e.id, 'down')}
                           disabled={idx === memberExpenses.length - 1}
-                          className="p-1 hover:text-primary text-zinc-300 disabled:opacity-20 transition-colors"
+                          className="p-1 hover:text-primary text-zinc-400 disabled:opacity-10 transition-colors"
                         >
                           <ChevronDown className="w-5 h-5" />
                         </button>
@@ -967,18 +967,18 @@ export const BudgetView: React.FC = () => {
                       className="bg-surface p-6 flex flex-col gap-4"
                     >
                       <div className="flex items-center gap-4">
-                        <div className="flex flex-col gap-1 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex flex-col gap-1 items-center justify-center border-r border-border/30 pr-4 mr-2">
                           <button 
                             onClick={() => moveSplitExpense(se.id, 'up')}
                             disabled={idx === 0}
-                            className="p-1 hover:text-emerald-600 text-zinc-300 disabled:opacity-20 transition-colors"
+                            className="p-1 hover:text-emerald-600 text-zinc-400 disabled:opacity-10 transition-colors"
                           >
                             <ChevronUp className="w-5 h-5" />
                           </button>
                           <button 
                             onClick={() => moveSplitExpense(se.id, 'down')}
                             disabled={idx === splitExpenses.length - 1}
-                            className="p-1 hover:text-emerald-600 text-zinc-300 disabled:opacity-20 transition-colors"
+                            className="p-1 hover:text-emerald-600 text-zinc-400 disabled:opacity-10 transition-colors"
                           >
                             <ChevronDown className="w-5 h-5" />
                           </button>
