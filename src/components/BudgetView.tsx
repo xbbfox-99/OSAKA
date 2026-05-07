@@ -30,17 +30,15 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.error('Firestore Error Detailed:', JSON.stringify(errInfo));
   
-  if (errorMessage.includes('Failed to fetch')) {
-    console.warn("Transient fetch error in Firestore operation");
+  if (errorMessage.includes('Failed to fetch') || errorMessage.includes('backend')) {
+    console.warn("⚠️ 資料庫連線失敗。如果您使用的是 GitHub Pages，請檢查 Firebase 設定中的 'Authorized Domains'。");
     return;
   }
   
-  // We can choose not to throw here if we want to avoid crashing the whole tab, 
-  // but usually it's good to let the user know if a CREATE or DELETE failed.
   if (operationType === OperationType.CREATE || operationType === OperationType.DELETE || operationType === OperationType.WRITE) {
-    alert("操作失敗，請檢查網路連接或稍後再試。");
+    alert("操作失敗，可能是網路連線不穩或權限不足。");
   }
 }
 
@@ -122,7 +120,7 @@ export const BudgetView: React.FC = () => {
 
   // Firestore Sync
   useEffect(() => {
-    const qExpenses = query(collection(db, 'expenses'), orderBy('order', 'desc'));
+    const qExpenses = query(collection(db, 'expenses'));
     const unsubExpenses = onSnapshot(qExpenses, (snapshot) => {
       const data = snapshot.docs.map(document => ({ 
         ...document.data(), 
@@ -131,7 +129,7 @@ export const BudgetView: React.FC = () => {
       setExpenses(data);
     }, (error) => handleFirestoreError(error, OperationType.GET, 'expenses'));
 
-    const qSplit = query(collection(db, 'splitExpenses'), orderBy('order', 'desc'));
+    const qSplit = query(collection(db, 'splitExpenses'));
     const unsubSplit = onSnapshot(qSplit, (snapshot) => {
       const data = snapshot.docs.map(document => ({ 
         ...document.data(), 
@@ -297,7 +295,14 @@ export const BudgetView: React.FC = () => {
     return `${curr === 'JPY' ? '¥' : '$'}${Math.round(amount).toLocaleString()}`;
   };
 
-  const memberExpenses = expenses.filter(e => e.member === currentMember);
+  const memberExpenses = expenses
+    .filter(e => e.member === currentMember)
+    .sort((a, b) => {
+      const orderA = a.order ?? 0;
+      const orderB = b.order ?? 0;
+      if (orderA !== orderB) return orderB - orderA;
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
   const totalPersonal = memberExpenses.reduce((acc, e) => acc + convert(e.amount, e.currency, currency), 0);
 
   const stripYear = (dateStr: string) => {
@@ -310,28 +315,25 @@ export const BudgetView: React.FC = () => {
   };
 
   const moveMemberExpense = async (id: string, direction: 'up' | 'down') => {
-    const currentMemberExps = expenses.filter(e => e.member === currentMember);
-    const index = currentMemberExps.findIndex(e => e.id === id);
+    const index = memberExpenses.findIndex(e => e.id === id);
     if (index === -1) return;
     
     let targetIndex = -1;
     if (direction === 'up' && index > 0) targetIndex = index - 1;
-    else if (direction === 'down' && index < currentMemberExps.length - 1) targetIndex = index + 1;
+    else if (direction === 'down' && index < memberExpenses.length - 1) targetIndex = index + 1;
 
     if (targetIndex !== -1) {
-      const item1 = currentMemberExps[index];
-      const item2 = currentMemberExps[targetIndex];
+      const item1 = memberExpenses[index];
+      const item2 = memberExpenses[targetIndex];
       
-      // Swap order fields
-      const tempOrder = item1.order || Date.now();
-      const newOrder1 = item2.order || Date.now();
-      const newOrder2 = tempOrder;
+      const order1 = item1.order ?? (Date.now() - index);
+      const order2 = item2.order ?? (Date.now() - targetIndex);
 
       try {
         const { updateDoc } = await import('firebase/firestore');
         await Promise.all([
-          updateDoc(doc(db, 'expenses', String(item1.id)), { order: newOrder1 }),
-          updateDoc(doc(db, 'expenses', String(item2.id)), { order: newOrder2 })
+          updateDoc(doc(db, 'expenses', String(item1.id)), { order: order2 }),
+          updateDoc(doc(db, 'expenses', String(item2.id)), { order: order1 })
         ]);
       } catch (error) {
         console.error("Order update failed:", error);
@@ -340,26 +342,31 @@ export const BudgetView: React.FC = () => {
   };
 
   const moveSplitExpense = async (id: string, direction: 'up' | 'down') => {
-    const index = splitExpenses.findIndex(e => e.id === id);
+    const sortedSplit = [...splitExpenses].sort((a, b) => {
+      const orderA = a.order ?? 0;
+      const orderB = b.order ?? 0;
+      if (orderA !== orderB) return orderB - orderA;
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+    const index = sortedSplit.findIndex(e => e.id === id);
     if (index === -1) return;
     
     let targetIndex = -1;
     if (direction === 'up' && index > 0) targetIndex = index - 1;
-    else if (direction === 'down' && index < splitExpenses.length - 1) targetIndex = index + 1;
+    else if (direction === 'down' && index < sortedSplit.length - 1) targetIndex = index + 1;
 
     if (targetIndex !== -1) {
-      const item1 = splitExpenses[index];
-      const item2 = splitExpenses[targetIndex];
+      const item1 = sortedSplit[index];
+      const item2 = sortedSplit[targetIndex];
       
-      const tempOrder = item1.order || Date.now();
-      const newOrder1 = item2.order || Date.now();
-      const newOrder2 = tempOrder;
+      const order1 = item1.order ?? (Date.now() - index);
+      const order2 = item2.order ?? (Date.now() - targetIndex);
 
       try {
         const { updateDoc } = await import('firebase/firestore');
         await Promise.all([
-          updateDoc(doc(db, 'splitExpenses', String(item1.id)), { order: newOrder1 }),
-          updateDoc(doc(db, 'splitExpenses', String(item2.id)), { order: newOrder2 })
+          updateDoc(doc(db, 'splitExpenses', String(item1.id)), { order: order2 }),
+          updateDoc(doc(db, 'splitExpenses', String(item2.id)), { order: order1 })
         ]);
       } catch (error) {
         console.error("Order update failed:", error);
@@ -1031,7 +1038,12 @@ export const BudgetView: React.FC = () => {
               <div className="flex flex-col">
                 <div className="text-[10px] font-bold text-zinc-400 tracking-wider mb-2">使用上下按鈕可調整順序</div>
                 <div className="space-y-px bg-border border border-border shadow-sm">
-                  {splitExpenses.map((se, idx) => (
+                  {[...splitExpenses].sort((a, b) => {
+                    const orderA = a.order ?? 0;
+                    const orderB = b.order ?? 0;
+                    if (orderA !== orderB) return orderB - orderA;
+                    return new Date(b.date).getTime() - new Date(a.date).getTime();
+                  }).map((se, idx, arr) => (
                     <motion.div 
                       key={se.id} 
                       layout
@@ -1050,7 +1062,7 @@ export const BudgetView: React.FC = () => {
                           </button>
                           <button 
                             onClick={() => moveSplitExpense(String(se.id), 'down')}
-                            disabled={idx === splitExpenses.length - 1}
+                            disabled={idx === arr.length - 1}
                             className="p-1 hover:text-emerald-600 text-zinc-400 disabled:opacity-10 transition-colors"
                           >
                             <ChevronDown className="w-5 h-5" />
