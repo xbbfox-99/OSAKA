@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Plus, Trash2, Users, User, ArrowRightLeft, Loader2, CheckCircle2, GripVertical, List, JapaneseYen, PieChart, X } from 'lucide-react';
-import { motion, AnimatePresence, Reorder } from 'motion/react';
+import { Camera, Plus, Trash2, Users, User, ArrowRightLeft, Loader2, CheckCircle2, GripVertical, List, JapaneseYen, PieChart, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { collection, addDoc, deleteDoc, onSnapshot, query, doc, orderBy } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -145,11 +145,16 @@ export const BudgetView: React.FC = () => {
         setTimeout(() => setScanStatus('idle'), 3000);
       } else {
         setScanStatus('error');
-        alert('辨識失敗，請確保照片清晰且是日本收據。若問題持續，請嘗試重新截圖。');
+        alert('辨識失敗，請確保照片清晰且是日本收據。');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Scanning Error:", err);
       setScanStatus('error');
+      if (err.message === 'QUOTA_EXCEEDED') {
+        alert('API 使用額度已達上限。請換個時間再試，或在「設定」中確認 API 金鑰狀態。');
+      } else {
+        alert(`辨識出錯：${err.message || '未知錯誤'}`);
+      }
     } finally {
       setIsScanning(false);
       e.target.value = '';
@@ -258,6 +263,37 @@ export const BudgetView: React.FC = () => {
       if (parts[2].length === 4) return `${parts[0]}/${parts[1]}`;
     }
     return dateStr;
+  };
+
+  const moveMemberExpense = (id: string, direction: 'up' | 'down') => {
+    const currentMemberExps = expenses.filter(e => e.member === currentMember);
+    const index = currentMemberExps.findIndex(e => e.id === id);
+    if (index === -1) return;
+    
+    if (direction === 'up' && index > 0) {
+      const newExps = [...currentMemberExps];
+      [newExps[index - 1], newExps[index]] = [newExps[index], newExps[index - 1]];
+      updateMemberExpensesOrder(newExps);
+    } else if (direction === 'down' && index < currentMemberExps.length - 1) {
+      const newExps = [...currentMemberExps];
+      [newExps[index + 1], newExps[index]] = [newExps[index], newExps[index + 1]];
+      updateMemberExpensesOrder(newExps);
+    }
+  };
+
+  const moveSplitExpense = (id: string, direction: 'up' | 'down') => {
+    const index = splitExpenses.findIndex(e => e.id === id);
+    if (index === -1) return;
+    
+    if (direction === 'up' && index > 0) {
+      const newExps = [...splitExpenses];
+      [newExps[index - 1], newExps[index]] = [newExps[index], newExps[index - 1]];
+      updateSplitOrder(newExps);
+    } else if (direction === 'down' && index < splitExpenses.length - 1) {
+      const newExps = [...splitExpenses];
+      [newExps[index + 1], newExps[index]] = [newExps[index], newExps[index + 1]];
+      updateSplitOrder(newExps);
+    }
   };
 
   const updateMemberExpensesOrder = (newOrder: Expense[]) => {
@@ -499,14 +535,41 @@ export const BudgetView: React.FC = () => {
                           <Plus className="w-2.5 h-2.5" /> 新增項
                         </button>
                       </div>
-                      <Reorder.Group axis="y" values={formData.items} onReorder={(newItems) => setFormData(p => ({...p, items: newItems}))} className="space-y-2">
+                      <div className="space-y-2">
                         {formData.items.map((item, idx) => (
-                          <Reorder.Item key={item.name + idx} value={item} className="flex justify-between items-center group bg-white/50 p-2 rounded border border-transparent hover:border-primary/20 transition-all">
+                          <motion.div 
+                            key={item.name + idx} 
+                            layout
+                            className="flex justify-between items-center group bg-white/50 p-2 rounded border border-transparent hover:border-primary/20 transition-all"
+                          >
                             <div className="flex items-center gap-2 flex-1">
-                              <div className="cursor-grab active:cursor-grabbing text-zinc-300">
-                                <GripVertical className="w-3 h-3" />
+                              <div className="flex flex-col gap-0.5 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                  onClick={() => {
+                                    if (idx === 0) return;
+                                    const next = [...formData.items];
+                                    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                    setFormData(p => ({ ...p, items: next }));
+                                  }}
+                                  disabled={idx === 0}
+                                  className="p-0.5 hover:text-primary text-zinc-300 disabled:opacity-20 transition-colors"
+                                >
+                                  <ChevronUp className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    if (idx === formData.items.length - 1) return;
+                                    const next = [...formData.items];
+                                    [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+                                    setFormData(p => ({ ...p, items: next }));
+                                  }}
+                                  disabled={idx === formData.items.length - 1}
+                                  className="p-0.5 hover:text-primary text-zinc-300 disabled:opacity-20 transition-colors"
+                                >
+                                  <ChevronDown className="w-4 h-4" />
+                                </button>
                               </div>
-                              <div className="flex flex-col flex-1">
+                              <div className="flex flex-col flex-1 pl-1">
                                 <input 
                                   value={item.translatedName || item.name}
                                   onChange={(e) => {
@@ -537,9 +600,9 @@ export const BudgetView: React.FC = () => {
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </div>
-                          </Reorder.Item>
+                          </motion.div>
                         ))}
-                      </Reorder.Group>
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -593,18 +656,33 @@ export const BudgetView: React.FC = () => {
                 </button>
               </div>
 
-              <Reorder.Group axis="y" values={memberExpenses} onReorder={updateMemberExpensesOrder} className="space-y-4">
+              <div className="space-y-4">
                 {memberExpenses.length === 0 ? (
                   <div className="text-center py-12 text-zinc-300 text-xs font-black uppercase tracking-widest">查無交易紀錄</div>
                 ) : (
-                  memberExpenses.map(e => (
-                    <Reorder.Item 
-                      key={e.id} 
-                      value={e}
+                  memberExpenses.map((e, idx) => (
+                    <motion.div 
+                      key={e.id}
+                      layout
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
                       className="flex gap-4 items-center group py-4 border-b border-border/50 bg-bg-dark"
                     >
-                      <div className="cursor-grab active:cursor-grabbing text-zinc-300 hover:text-primary transition-colors p-2">
-                        <GripVertical className="w-4 h-4" />
+                      <div className="flex flex-col gap-1 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => moveMemberExpense(e.id, 'up')}
+                          disabled={idx === 0}
+                          className="p-1 hover:text-primary text-zinc-300 disabled:opacity-20 transition-colors"
+                        >
+                          <ChevronUp className="w-5 h-5" />
+                        </button>
+                        <button 
+                          onClick={() => moveMemberExpense(e.id, 'down')}
+                          disabled={idx === memberExpenses.length - 1}
+                          className="p-1 hover:text-primary text-zinc-300 disabled:opacity-20 transition-colors"
+                        >
+                          <ChevronDown className="w-5 h-5" />
+                        </button>
                       </div>
                       <div className="text-[10px] font-black uppercase tracking-widest text-zinc-300 vertical-text origin-center -rotate-90 w-4">{stripYear(e.date)}</div>
                       <div className="flex-1">
@@ -668,10 +746,10 @@ export const BudgetView: React.FC = () => {
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                    </Reorder.Item>
+                    </motion.div>
                   ))
                 )}
-              </Reorder.Group>
+              </div>
             </div>
           </motion.div>
       </div>
@@ -878,13 +956,32 @@ export const BudgetView: React.FC = () => {
 
               {/* Transactions */}
               <div className="flex flex-col">
-                <div className="text-[10px] font-bold text-zinc-400 tracking-wider mb-2">長按圖示可調整收錄順序</div>
-                <Reorder.Group axis="y" values={splitExpenses} onReorder={updateSplitOrder} className="space-y-px bg-border border border-border shadow-sm">
-                  {splitExpenses.map(se => (
-                    <Reorder.Item key={se.id} value={se} className="bg-surface p-6 flex flex-col gap-4">
+                <div className="text-[10px] font-bold text-zinc-400 tracking-wider mb-2">使用上下按鈕可調整順序</div>
+                <div className="space-y-px bg-border border border-border shadow-sm">
+                  {splitExpenses.map((se, idx) => (
+                    <motion.div 
+                      key={se.id} 
+                      layout
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="bg-surface p-6 flex flex-col gap-4"
+                    >
                       <div className="flex items-center gap-4">
-                        <div className="cursor-grab active:cursor-grabbing text-zinc-300 hover:text-primary transition-colors">
-                          <GripVertical className="w-4 h-4" />
+                        <div className="flex flex-col gap-1 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => moveSplitExpense(se.id, 'up')}
+                            disabled={idx === 0}
+                            className="p-1 hover:text-emerald-600 text-zinc-300 disabled:opacity-20 transition-colors"
+                          >
+                            <ChevronUp className="w-5 h-5" />
+                          </button>
+                          <button 
+                            onClick={() => moveSplitExpense(se.id, 'down')}
+                            disabled={idx === splitExpenses.length - 1}
+                            className="p-1 hover:text-emerald-600 text-zinc-300 disabled:opacity-20 transition-colors"
+                          >
+                            <ChevronDown className="w-5 h-5" />
+                          </button>
                         </div>
                         <div className="flex-1">
                           <div className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-1">{stripYear(se.date)} // 由 {se.payer} 付款</div>
@@ -913,9 +1010,9 @@ export const BudgetView: React.FC = () => {
                           </span>
                         ))}
                       </div>
-                    </Reorder.Item>
+                    </motion.div>
                   ))}
-                </Reorder.Group>
+                </div>
               </div>
 
             </div>

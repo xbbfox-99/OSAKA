@@ -58,7 +58,7 @@ export async function getDestinationGuideStream(
 
   try {
     const result = await client.models.generateContentStream({
-      model: "gemini-flash-latest",
+      model: "gemini-1.5-flash",
       contents: prompt
     });
 
@@ -94,7 +94,7 @@ export async function getDestinationGuide(title: string, query: string): Promise
 
   try {
     const result = await client.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-1.5-flash",
       contents: prompt
     });
     return (result.text as string) || "暫時無法取得導覽資訊，請稍後再試。";
@@ -143,7 +143,7 @@ export async function scanReceipt(base64Image: string, mimeType: string): Promis
 
   try {
     const response = await client.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-1.5-flash",
       contents: {
         parts: [
           { text: prompt },
@@ -197,8 +197,13 @@ export async function scanReceipt(base64Image: string, mimeType: string): Promis
         price: Number(item.price) || 0
       }))
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ Gemini Scan Error:", error);
-    return null;
+    // Throw a more descriptive error if possible
+    const message = error.message || String(error);
+    if (message.includes('429') || message.includes('quota')) {
+      throw new Error("QUOTA_EXCEEDED");
+    }
+    throw error;
   }
 }
