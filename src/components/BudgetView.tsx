@@ -122,7 +122,7 @@ export const BudgetView: React.FC = () => {
 
   // Firestore Sync
   useEffect(() => {
-    const qExpenses = query(collection(db, 'expenses'), orderBy('order', 'asc'));
+    const qExpenses = query(collection(db, 'expenses'), orderBy('order', 'desc'));
     const unsubExpenses = onSnapshot(qExpenses, (snapshot) => {
       const data = snapshot.docs.map(document => ({ 
         ...document.data(), 
@@ -131,7 +131,7 @@ export const BudgetView: React.FC = () => {
       setExpenses(data);
     }, (error) => handleFirestoreError(error, OperationType.GET, 'expenses'));
 
-    const qSplit = query(collection(db, 'splitExpenses'), orderBy('order', 'asc'));
+    const qSplit = query(collection(db, 'splitExpenses'), orderBy('order', 'desc'));
     const unsubSplit = onSnapshot(qSplit, (snapshot) => {
       const data = snapshot.docs.map(document => ({ 
         ...document.data(), 
