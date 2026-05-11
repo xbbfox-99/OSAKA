@@ -58,7 +58,7 @@ export async function getDestinationGuideStream(
 
   try {
     const result = await client.models.generateContentStream({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.0-flash",
       contents: prompt
     });
 
@@ -94,7 +94,7 @@ export async function getDestinationGuide(title: string, query: string): Promise
 
   try {
     const result = await client.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.0-flash",
       contents: prompt
     });
     return (result.text as string) || "暫時無法取得導覽資訊，請稍後再試。";
@@ -143,7 +143,7 @@ export async function scanReceipt(base64Image: string, mimeType: string): Promis
 
   try {
     const response = await client.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.0-flash",
       contents: {
         parts: [
           { text: prompt },

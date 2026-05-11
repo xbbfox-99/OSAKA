@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Plus, Trash2, Users, User, ArrowRightLeft, Loader2, CheckCircle2, GripVertical, List, JapaneseYen, PieChart, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Camera, Plus, Trash2, Users, User, ArrowRightLeft, Loader2, CheckCircle2, GripVertical, List, JapaneseYen, PieChart, X, ChevronUp, ChevronDown, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import * as XLSX from 'xlsx';
 import { collection, addDoc, deleteDoc, onSnapshot, query, doc, orderBy } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { MEMBERS, MEMBER_COLORS, JPY_TWD, CATEGORIES } from '../constants';
@@ -37,7 +38,11 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     return;
   }
   
-  if (operationType === OperationType.CREATE || operationType === OperationType.DELETE || operationType === OperationType.WRITE) {
+  if (operationType === OperationType.LIST || operationType === OperationType.GET) {
+    if (errorMessage.includes('permission')) {
+      alert("讀取失敗：權限不足。請檢查 Firebase 安全規則。");
+    }
+  } else if (operationType === OperationType.CREATE || operationType === OperationType.DELETE || operationType === OperationType.WRITE) {
     alert("操作失敗，可能是網路連線不穩或權限不足。");
   }
 }
@@ -119,6 +124,8 @@ export const BudgetView: React.FC = () => {
   const currentMemberName = MEMBERS[currentMember];
 
   // Firestore Sync
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  
   useEffect(() => {
     const qExpenses = query(collection(db, 'expenses'));
     const unsubExpenses = onSnapshot(qExpenses, (snapshot) => {
@@ -296,12 +303,25 @@ export const BudgetView: React.FC = () => {
   };
 
   const memberExpenses = expenses
-    .filter(e => e.member === currentMember)
+    .filter(e => {
+      // Robust comparison: handle string vs number for member ID
+      const mId = typeof e.member === 'string' ? parseInt(e.member) : e.member;
+      return mId === currentMember;
+    })
     .sort((a, b) => {
+      // Primary sort by date (Newest first) - handle invalid dates
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      
+      const timeA = isNaN(dateA) ? 0 : dateA;
+      const timeB = isNaN(dateB) ? 0 : dateB;
+
+      if (timeB !== timeA) return timeB - timeA;
+      
+      // Secondary sort by order (Newest/Highest first)
       const orderA = a.order ?? 0;
       const orderB = b.order ?? 0;
-      if (orderA !== orderB) return orderB - orderA;
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
+      return orderB - orderA;
     });
   const totalPersonal = memberExpenses.reduce((acc, e) => acc + convert(e.amount, e.currency, currency), 0);
 
@@ -312,6 +332,16 @@ export const BudgetView: React.FC = () => {
       if (parts[2].length === 4) return `${parts[0]}/${parts[1]}`;
     }
     return dateStr;
+  };
+
+  const updateExpenseCategory = async (id: string, newCategory: string) => {
+    try {
+      const { updateDoc } = await import('firebase/firestore');
+      await updateDoc(doc(db, 'expenses', id), { category: newCategory });
+      setEditingCategoryId(null);
+    } catch (error) {
+      console.error("Category update failed:", error);
+    }
   };
 
   const moveMemberExpense = async (id: string, direction: 'up' | 'down') => {
@@ -343,10 +373,16 @@ export const BudgetView: React.FC = () => {
 
   const moveSplitExpense = async (id: string, direction: 'up' | 'down') => {
     const sortedSplit = [...splitExpenses].sort((a, b) => {
+      // Primary sort by date (Newest first)
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      const timeA = isNaN(dateA) ? 0 : dateA;
+      const timeB = isNaN(dateB) ? 0 : dateB;
+      if (timeB !== timeA) return timeB - timeA;
+      // Secondary sort by order
       const orderA = a.order ?? 0;
       const orderB = b.order ?? 0;
-      if (orderA !== orderB) return orderB - orderA;
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
+      return orderB - orderA;
     });
     const index = sortedSplit.findIndex(e => e.id === id);
     if (index === -1) return;
@@ -380,6 +416,111 @@ export const BudgetView: React.FC = () => {
 
   const updateSplitOrder = () => {
     // This is now handled by Firestore snapshots
+  };
+
+  const exportSplitToExcel = () => {
+    // 1. Prepare Detailed List
+    const detailedData = [...splitExpenses].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(se => ({
+      '日期': se.date,
+      '項目': se.name,
+      '付款人': se.payer,
+      '參與分攤人員': se.participants.join(', '),
+      '原始金額': se.amount,
+      '幣別': se.currency,
+      [`轉換金額(${currency})`]: Math.round(convert(se.amount, se.currency, currency))
+    }));
+
+    // 2. Prepare Member Summary
+    const individualBreakdown = MEMBERS.map((m) => {
+      let paid = 0;
+      let share = 0;
+      splitExpenses.forEach(se => {
+        const disp = convert(se.amount, se.currency, currency);
+        const per = disp / se.participants.length;
+        if (se.payer === m) paid += disp;
+        if (se.participants.includes(m)) share += per;
+      });
+      return {
+        '成員': m,
+        [`代墊金額(${currency})`]: Math.round(paid),
+        [`應付份額(${currency})`]: Math.round(share),
+        [`最終結餘(${currency})`]: Math.round(paid - share)
+      };
+    });
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Add Group Detailed Sheet
+    const wsDetails = XLSX.utils.json_to_sheet(detailedData);
+    XLSX.utils.book_append_sheet(wb, wsDetails, "團體分帳總表");
+
+    // Add Individual Member Detail Sheets
+    MEMBERS.forEach(m => {
+      const memberDetails = splitExpenses
+        .filter(se => se.payer === m || se.participants.includes(m))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .map(se => {
+          const totalInDisplayCurrency = convert(se.amount, se.currency, currency);
+          const myShareInDisplayCurrency = se.participants.includes(m) ? totalInDisplayCurrency / se.participants.length : 0;
+          const myPaymentInDisplayCurrency = se.payer === m ? totalInDisplayCurrency : 0;
+          
+          return {
+            '日期': se.date,
+            '項目': se.name,
+            '角色': se.payer === m ? (se.participants.includes(m) ? '付款人+參與者' : '僅代墊') : '參與者',
+            [`原始總額(${se.currency})`]: se.amount,
+            [`個人代墊(${currency})`]: Math.round(myPaymentInDisplayCurrency),
+            [`個人應付(${currency})`]: Math.round(myShareInDisplayCurrency),
+            [`收支差額(${currency})`]: Math.round(myPaymentInDisplayCurrency - myShareInDisplayCurrency)
+          };
+        });
+      
+      const wsMember = XLSX.utils.json_to_sheet(memberDetails);
+      XLSX.utils.book_append_sheet(wb, wsMember, `${m}對帳單`);
+    });
+
+    // Add Summary Sheet last
+    const wsSummary = XLSX.utils.json_to_sheet(individualBreakdown);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "個人結算匯總");
+
+    // Save File
+    XLSX.writeFile(wb, `日本旅遊_分帳報告_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const exportPersonalToExcel = () => {
+    // 1. Prepare Detailed List
+    const detailedData = [...memberExpenses].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(e => ({
+      '日期': e.date,
+      '類別': e.category,
+      '項目': e.name,
+      '由': e.store || '-',
+      '原始金額': e.amount,
+      '幣別': e.currency,
+      [`轉換金額(${currency})`]: Math.round(convert(e.amount, e.currency, currency))
+    }));
+
+    // 2. Prepare Category Summary
+    const categoryTotals: Record<string, number> = {};
+    memberExpenses.forEach(e => {
+      const val = convert(e.amount, e.currency, currency);
+      categoryTotals[e.category] = (categoryTotals[e.category] || 0) + val;
+    });
+    
+    const summaryData = Object.entries(categoryTotals).map(([cat, total]) => ({
+      '類別': cat,
+      [`總支出(${currency})`]: Math.round(total)
+    }));
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    const wsDetails = XLSX.utils.json_to_sheet(detailedData);
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+
+    XLSX.utils.book_append_sheet(wb, wsDetails, "個人支出明細");
+    XLSX.utils.book_append_sheet(wb, wsSummary, "支出類別明細");
+
+    XLSX.writeFile(wb, `個人支出_${currentMemberName}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const getAnalyticsData = () => {
@@ -699,8 +840,15 @@ export const BudgetView: React.FC = () => {
                 <div className="flex flex-col">
                   <h3 className="text-lg font-black tracking-tighter uppercase text-zinc-800">{MEMBERS[currentMember]} 的帳本</h3>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-zinc-400 tracking-wider">合計: {expenses.length} 筆資料</span>
+                    <span className="text-[10px] font-bold text-zinc-400 tracking-wider">
+                      本頁面: {memberExpenses.length} 筆 / 資料庫總計: {expenses.length} 筆
+                    </span>
                     {isMigrating && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+                    {expenses.length === 0 && !isMigrating && (
+                      <span className="flex items-center gap-1 text-[8px] font-black text-rose-500 uppercase tracking-widest bg-rose-50 px-2 py-0.5 animate-pulse">
+                        <Loader2 className="w-2 h-2 animate-spin" /> 連線中
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -728,17 +876,50 @@ export const BudgetView: React.FC = () => {
                   {format(totalPersonal, currency)}
                 </div>
                 
-                <button 
-                  onClick={() => setShowAnalytics(true)}
-                  className="mt-6 flex items-center gap-2 px-6 py-2 border border-border hover:bg-zinc-50 transition-colors text-[10px] font-black uppercase tracking-widest text-zinc-600 shadow-sm"
-                >
-                  <PieChart className="w-3 h-3 text-primary" /> 消費分析
-                </button>
+                <div className="mt-6 flex items-center gap-2">
+                  <button 
+                    onClick={() => setShowAnalytics(true)}
+                    className="flex items-center gap-2 px-6 py-2 border border-border hover:bg-zinc-50 transition-colors text-[10px] font-black uppercase tracking-widest text-zinc-600 shadow-sm"
+                  >
+                    <PieChart className="w-3 h-3 text-primary" /> 消費分析
+                  </button>
+                  <button 
+                    onClick={exportPersonalToExcel}
+                    className="flex items-center gap-2 px-6 py-2 border border-border hover:bg-zinc-50 transition-colors text-[10px] font-black uppercase tracking-widest text-emerald-600 shadow-sm"
+                  >
+                    <Download className="w-3 h-3" /> 匯出 EXCEL
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4">
                 {memberExpenses.length === 0 ? (
-                  <div className="text-center py-12 text-zinc-300 text-xs font-black uppercase tracking-widest">查無交易紀錄</div>
+                  <div className="text-center py-12 space-y-4">
+                    <div className="text-zinc-300 text-xs font-black uppercase tracking-widest">查無交易紀錄</div>
+                    {expenses.length > 0 && (
+                      <div className="bg-bg-dark border border-dashed border-border p-4 max-w-xs mx-auto">
+                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">其他成員有資料：</p>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {MEMBERS.map((m, idx) => {
+                            const count = expenses.filter(e => {
+                               const mId = typeof e.member === 'string' ? parseInt(e.member) : e.member;
+                               return mId === idx;
+                            }).length;
+                            if (count === 0 || idx === currentMember) return null;
+                            return (
+                              <button 
+                                key={m}
+                                onClick={() => setCurrentMember(idx)}
+                                className="px-2 py-1 bg-zinc-100 text-zinc-500 text-[9px] font-black border border-border hover:border-primary hover:text-primary transition-all"
+                              >
+                                {m} ({count} 筆)
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   memberExpenses.map((e, idx) => (
                     <motion.div 
@@ -765,16 +946,53 @@ export const BudgetView: React.FC = () => {
                         </button>
                       </div>
                       <div className="text-[10px] font-black uppercase tracking-widest text-zinc-300 vertical-text origin-center -rotate-90 w-4">{stripYear(e.date)}</div>
-                      <div className="flex-1">
-                        <div className={cn(
-                          "text-xs font-black uppercase tracking-[0.2em] mb-1",
-                          e.category.includes('餐飲') ? 'text-orange-500' :
-                          e.category.includes('交通') ? 'text-violet-500' :
-                          e.category.includes('景點') ? 'text-emerald-500' :
-                          e.category.includes('購物') ? 'text-rose-500' :
-                          e.category.includes('住宿') ? 'text-amber-600' : 'text-zinc-400'
-                        )}>{e.category}</div>
-                        <div className="text-base font-black tracking-tight uppercase text-zinc-800">{e.name}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="relative inline-block mb-1">
+                          <button 
+                            onClick={() => setEditingCategoryId(editingCategoryId === e.id ? null : (e.id || null))}
+                            className={cn(
+                              "text-[10px] font-black uppercase tracking-[0.2em] px-2 py-0.5 border border-transparent hover:border-current transition-all",
+                              e.category.includes('餐飲') ? 'text-orange-500 bg-orange-50/50' :
+                              e.category.includes('交通') ? 'text-violet-500 bg-violet-50/50' :
+                              e.category.includes('景點') ? 'text-emerald-500 bg-emerald-50/50' :
+                              e.category.includes('購物') ? 'text-rose-500 bg-rose-50/50' :
+                              e.category.includes('住宿') ? 'text-amber-600 bg-amber-50/50' : 'text-zinc-400 bg-zinc-50'
+                            )}
+                          >
+                            {e.category}
+                          </button>
+                          
+                          <AnimatePresence>
+                            {editingCategoryId === e.id && (
+                              <>
+                                <div 
+                                  className="fixed inset-0 z-40" 
+                                  onClick={() => setEditingCategoryId(null)} 
+                                />
+                                <motion.div 
+                                  initial={{ opacity: 0, y: -10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -10 }}
+                                  className="absolute left-0 top-full mt-1 z-50 bg-white border border-border shadow-xl p-1 grid grid-cols-2 gap-1 w-48"
+                                >
+                                  {CATEGORIES.map(c => (
+                                    <button
+                                      key={c}
+                                      onClick={() => updateExpenseCategory(String(e.id), c)}
+                                      className={cn(
+                                        "text-[9px] font-bold px-2 py-1.5 text-left uppercase tracking-widest hover:bg-zinc-50 transition-colors",
+                                        e.category === c ? "text-primary bg-zinc-50" : "text-zinc-500"
+                                      )}
+                                    >
+                                      {c}
+                                    </button>
+                                  ))}
+                                </motion.div>
+                              </>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                        <div className="text-base font-black tracking-tight uppercase text-zinc-800 truncate">{e.name}</div>
                         {e.store && e.store !== e.name && <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{e.store}</div>}
                         
                         {(e.preTaxAmount || (e.items && e.items.length > 0)) && (
@@ -913,10 +1131,20 @@ export const BudgetView: React.FC = () => {
               </div>
             </div>
 
-            {/* Split Results */}
-            <div className="space-y-10">
+            <div className="space-y-8">
               <div className="flex justify-between items-center border-b border-border pb-4">
-                <h3 className="text-lg font-black tracking-tighter uppercase text-zinc-800">結算報告</h3>
+                <div className="flex flex-col">
+                  <h3 className="text-lg font-black tracking-tighter uppercase text-zinc-800">結算報告</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-zinc-400 tracking-wider">合計: {splitExpenses.length} 筆資料</span>
+                    <button 
+                      onClick={exportSplitToExcel}
+                      className="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 uppercase tracking-widest hover:underline"
+                    >
+                      <Download className="w-3 h-3" /> 匯出 Excel
+                    </button>
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   {(['JPY', 'TWD'] as const).map(c => (
                     <button 
@@ -972,6 +1200,20 @@ export const BudgetView: React.FC = () => {
 
                 const totalGroupExpense = splitExpenses.reduce((acc, se) => acc + convert(se.amount, se.currency, currency), 0);
 
+                // Individual breakdown
+                const individualBreakdown = MEMBERS.reduce((acc, m) => {
+                  let paid = 0;
+                  let share = 0;
+                  splitExpenses.forEach(se => {
+                    const disp = convert(se.amount, se.currency, currency);
+                    const per = disp / se.participants.length;
+                    if (se.payer === m) paid += disp;
+                    if (se.participants.includes(m)) share += per;
+                  });
+                  acc[m] = { paid, share };
+                  return acc;
+                }, {} as Record<string, { paid: number; share: number }>);
+
                 return (
                   <div className="space-y-10">
                     <div className="grid grid-cols-2 gap-px bg-border border border-border overflow-hidden shadow-sm">
@@ -987,6 +1229,53 @@ export const BudgetView: React.FC = () => {
                           </div>
                         );
                       })}
+                    </div>
+
+                    {/* Member Analysis */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className="h-px flex-1 bg-border" />
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-300">各成員支出明細 // {currency}</h4>
+                        <div className="h-px flex-1 bg-border" />
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {MEMBERS.map((m, idx) => {
+                          const data = individualBreakdown[m];
+                          const sharePercentage = totalGroupExpense > 0 ? (data.share / totalGroupExpense * 100).toFixed(0) : '0';
+                          return (
+                            <div key={m+'detail'} className="bg-surface border border-border p-4 shadow-sm space-y-3">
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: MEMBER_COLORS[idx] }} />
+                                  <span className="text-xs font-black text-zinc-800 uppercase tracking-widest">{m}</span>
+                                </div>
+                                <span className="text-[9px] font-bold text-zinc-400">佔比 {sharePercentage}%</span>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tighter">總應付 (責任)</span>
+                                  <div className="text-sm font-black text-zinc-700 font-mono">{format(data.share, currency)}</div>
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tighter">代墊金額 (金流)</span>
+                                  <div className="text-sm font-black text-emerald-600 font-mono">{format(data.paid, currency)}</div>
+                                </div>
+                              </div>
+
+                              <div className="h-1 w-full bg-zinc-50 overflow-hidden">
+                                <motion.div 
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${sharePercentage}%` }}
+                                  className="h-full"
+                                  style={{ backgroundColor: MEMBER_COLORS[idx] }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {/* Settlement Plan */}
@@ -1039,10 +1328,16 @@ export const BudgetView: React.FC = () => {
                 <div className="text-[10px] font-bold text-zinc-400 tracking-wider mb-2">使用上下按鈕可調整順序</div>
                 <div className="space-y-px bg-border border border-border shadow-sm">
                   {[...splitExpenses].sort((a, b) => {
+                    // Primary sort by date (Newest first)
+                    const dateA = a.date ? new Date(a.date).getTime() : 0;
+                    const dateB = b.date ? new Date(b.date).getTime() : 0;
+                    const timeA = isNaN(dateA) ? 0 : dateA;
+                    const timeB = isNaN(dateB) ? 0 : dateB;
+                    if (timeB !== timeA) return timeB - timeA;
+                    // Secondary sort by order
                     const orderA = a.order ?? 0;
                     const orderB = b.order ?? 0;
-                    if (orderA !== orderB) return orderB - orderA;
-                    return new Date(b.date).getTime() - new Date(a.date).getTime();
+                    return orderB - orderA;
                   }).map((se, idx, arr) => (
                     <motion.div 
                       key={se.id} 
